@@ -13,6 +13,7 @@ G_DECLARE_FINAL_TYPE (DuplicateLineAppActivatable, duplicate_line_app_activatabl
 struct _DuplicateLineAppActivatable
 {
 	GObject parent;
+	GtkApplication *app;
 	GeditMenuExtension *menu_ext;
 };
 
@@ -26,9 +27,9 @@ static void
 duplicate_line_app_activatable_set_property (GObject *object, guint prop_id,
                                             const GValue *value, GParamSpec *pspec)
 {
+	DuplicateLineAppActivatable *self = DUPLICATE_LINE_APP_ACTIVATABLE (object);
 	if (prop_id == APP_PROP_APP)
-		/* just store it via g_object_set_data for simplicity */
-		g_object_set_data (object, "app", g_value_get_object (value));
+		self->app = g_value_get_object (value);
 	else
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -37,8 +38,9 @@ static void
 duplicate_line_app_activatable_get_property (GObject *object, guint prop_id,
                                             GValue *value, GParamSpec *pspec)
 {
+	DuplicateLineAppActivatable *self = DUPLICATE_LINE_APP_ACTIVATABLE (object);
 	if (prop_id == APP_PROP_APP)
-		g_value_set_object (value, g_object_get_data (object, "app"));
+		g_value_set_object (value, self->app);
 	else
 		G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
 }
@@ -47,7 +49,6 @@ static void
 duplicate_line_app_activate (GeditAppActivatable *activatable)
 {
 	DuplicateLineAppActivatable *self = DUPLICATE_LINE_APP_ACTIVATABLE (activatable);
-	GtkApplication *app = g_object_get_data (G_OBJECT (self), "app");
 	GMenuItem *item;
 	const gchar *accels[] = { "<Primary><Shift>d", NULL };
 
@@ -56,17 +57,16 @@ duplicate_line_app_activate (GeditAppActivatable *activatable)
 	gedit_menu_extension_append_menu_item (self->menu_ext, item);
 	g_object_unref (item);
 
-	gtk_application_set_accels_for_action (app, "win.duplicate-line", accels);
+	gtk_application_set_accels_for_action (self->app, "win.duplicate-line", accels);
 }
 
 static void
 duplicate_line_app_deactivate (GeditAppActivatable *activatable)
 {
 	DuplicateLineAppActivatable *self = DUPLICATE_LINE_APP_ACTIVATABLE (activatable);
-	GtkApplication *app = g_object_get_data (G_OBJECT (self), "app");
 	const gchar *accels[] = { NULL };
 
-	gtk_application_set_accels_for_action (app, "win.duplicate-line", accels);
+	gtk_application_set_accels_for_action (self->app, "win.duplicate-line", accels);
 	gedit_menu_extension_remove_items (self->menu_ext);
 	g_clear_object (&self->menu_ext);
 }
@@ -146,38 +146,16 @@ on_duplicate_line (GSimpleAction *action, GVariant *parameter, gpointer user_dat
 		return;
 
 	buf = GTK_TEXT_BUFFER (doc);
+	gtk_text_buffer_begin_user_action (buf);
 
 	if (gtk_text_buffer_get_has_selection (buf))
 	{
-		gint l1, l2;
-
 		gtk_text_buffer_get_selection_bounds (buf, &s, &e);
-		l1 = gtk_text_iter_get_line (&s);
-		l2 = gtk_text_iter_get_line (&e);
 
-		if (l1 != l2)
-		{
-			/* Multi-line selection: duplicate whole lines */
-			gtk_text_iter_set_line_offset (&s, 0);
-			if (!gtk_text_iter_ends_line (&e))
-				gtk_text_iter_forward_to_line_end (&e);
-
-			text = gtk_text_buffer_get_text (buf, &s, &e, FALSE);
-			gchar *ins = g_strconcat ("\n", text, NULL);
-			gtk_text_buffer_insert (buf, &e, ins, -1);
-			g_free (ins);
-			g_free (text);
-		}
-		else
-		{
-			/* Same-line selection: duplicate inline */
-			text = gtk_text_buffer_get_text (buf, &s, &e, FALSE);
-			gtk_text_buffer_place_cursor (buf, &s);
-			/* re-get iter after place_cursor */
-			gtk_text_buffer_get_selection_bounds (buf, &s, &e);
-			gtk_text_buffer_insert (buf, &e, text, -1);
-			g_free (text);
-		}
+		/* Duplicate exactly what is selected */
+		text = gtk_text_buffer_get_text (buf, &s, &e, FALSE);
+		gtk_text_buffer_insert (buf, &e, text, -1);
+		g_free (text);
 	}
 	else
 	{
@@ -195,6 +173,8 @@ on_duplicate_line (GSimpleAction *action, GVariant *parameter, gpointer user_dat
 		g_free (ins);
 		g_free (text);
 	}
+
+	gtk_text_buffer_end_user_action (buf);
 }
 
 static void
