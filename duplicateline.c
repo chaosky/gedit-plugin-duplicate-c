@@ -203,8 +203,12 @@ duplicate_line_window_update_state (GeditWindowActivatable *activatable)
 	GAction *action;
 
 	action = g_action_map_lookup_action (G_ACTION_MAP (self->window), "duplicate-line");
-	g_simple_action_set_enabled (G_SIMPLE_ACTION (action),
-	                             gedit_window_get_active_document (self->window) != NULL);
+
+	/* update_state may run before activate() registers the action (or after
+	 * deactivate() removes it), so the lookup can return NULL on gedit 50. */
+	if (action != NULL && G_IS_SIMPLE_ACTION (action))
+		g_simple_action_set_enabled (G_SIMPLE_ACTION (action),
+		                             gedit_window_get_active_document (self->window) != NULL);
 }
 
 static void

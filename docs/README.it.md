@@ -33,6 +33,30 @@ cp builddir/libduplicateline.so duplicateline.plugin ~/.local/share/gedit/plugin
 
 Quindi abilita «Duplicate Line» in gedit → Preferenze → Plugin.
 
+## Risoluzione dei problemi
+
+### `libgedit-49.so: cannot open shared object file: No such file or directory`
+
+Se il plugin smette di caricarsi dopo un aggiornamento di gedit e vedi qualcosa come:
+
+```
+Failed to load module 'duplicateline': libgedit-49.so: cannot open shared object file: No such file or directory
+Error loading plugin 'duplicateline'
+```
+
+questo è **previsto dopo un aggiornamento di versione maggiore di gedit**. Il `.so` compilato è collegato all'esatto `libgedit-<N>.so` installato al momento della compilazione (ad esempio `libgedit-49.so` per gedit 49). Quando gedit viene aggiornato (ad esempio alla 50), la vecchia libreria viene rimossa, quindi il plugin non riesce più a trovarla.
+
+**Soluzione: basta ricompilare per il nuovo gedit e reinstallare.**
+
+```bash
+rm -rf builddir
+meson setup builddir
+meson compile -C builddir
+cp builddir/libduplicateline.so ~/.local/share/gedit/plugins/
+```
+
+Quindi riavvia gedit. Devi farlo una volta dopo ogni aggiornamento di versione maggiore di gedit.
+
 ## Modificare la scorciatoia
 
 Modifica `duplicateline.c` e trova:
